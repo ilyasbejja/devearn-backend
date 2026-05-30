@@ -69,33 +69,19 @@ def register(user: UserCreate, background_tasks: BackgroundTasks, db: Session = 
             detail=msg
         )
     
-    # Generate verification code
-    verification_code = generate_verification_code()
-    hashed_code = hash_code(verification_code)
-    code_expires_at = get_verification_code_expiration()
-    
-    # Create new user with unverified status
+    # Create new user marked as verified (email verification disabled)
     new_user = User(
         email=user.email,
         hashed_password=get_password_hash(user.password),
         full_name=user.full_name,
         role=user.role,
-        is_verified=False,
-        email_verification_code_hash=hashed_code,
-        email_verification_expires_at=code_expires_at,
-        last_verification_sent_at=datetime.now(timezone.utc),
+        is_verified=True,
     )
     
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     
-    # Send verification email asynchronously
-    background_tasks.add_task(
-        send_verification_code_email,
-        to_email=user.email,
-        code=verification_code
-    )
     
     return new_user
 
@@ -390,30 +376,7 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Email verification is REQUIRED before login
-    if not user.is_verified:
-        # Generate new verification code on login attempt if not verified
-        verification_code = generate_verification_code()
-        hashed_code = hash_code(verification_code)
-        code_expires_at = get_verification_code_expiration()
-        
-        user.email_verification_code_hash = hashed_code
-        user.email_verification_expires_at = code_expires_at
-        user.email_verification_attempts = 0
-        user.last_verification_sent_at = datetime.now(timezone.utc)
-        db.commit()
-        
-        # Send verification email asynchronously
-        background_tasks.add_task(
-            send_verification_code_email,
-            to_email=user.email,
-            code=verification_code
-        )
-        
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Veuillez vérifier votre email avant de vous connecter. Un nouveau code de vérification vous a été envoyé par email."
-        )
+    # Email verification disabled: allow login for all authenticated users
     
     access_token = create_access_token(data={"sub": user.email})
     
