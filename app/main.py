@@ -10,7 +10,7 @@ from app.routers.users import router as users_router
 from app.routers.messages import router as messages_router
 import os
 from dotenv import load_dotenv
-import sqlite3
+
 load_dotenv()
 app = FastAPI(
     title="DevEarn Backend API",
@@ -37,67 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def apply_migrations():
-    """Auto-migrate SQLite db if columns are missing"""
-    import os
-    db_path = "./devearn.db"
-    if os.path.exists(db_path):
-        try:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            
-            # Check for missing columns in users table
-            cursor.execute("PRAGMA table_info(users)")
-            columns = [info[1] for info in cursor.fetchall()]
-            
-            def add_column_if_missing(col_name, col_type):
-                if col_name not in columns:
-                    print(f"[INFO] Adding missing column '{col_name}' to 'users' table...")
-                    cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
-
-            add_column_if_missing("phone", "VARCHAR")
-            add_column_if_missing("github_url", "VARCHAR")
-            add_column_if_missing("linkedin_url", "VARCHAR")
-            add_column_if_missing("website_url", "VARCHAR")
-            add_column_if_missing("xp_points", "INTEGER DEFAULT 0")
-            add_column_if_missing("specialty", "VARCHAR")
-            
-            # Email verification fields
-            add_column_if_missing("is_verified", "BOOLEAN DEFAULT 0")
-            add_column_if_missing("email_verification_code_hash", "VARCHAR")
-            add_column_if_missing("email_verification_expires_at", "DATETIME")
-            add_column_if_missing("email_verification_attempts", "INTEGER DEFAULT 0")
-            add_column_if_missing("last_verification_sent_at", "DATETIME")
-
-            # Password reset fields
-            add_column_if_missing("password_reset_code_hash", "VARCHAR")
-            add_column_if_missing("password_reset_expires_at", "DATETIME")
-            add_column_if_missing("password_reset_attempts", "INTEGER DEFAULT 0")
-            add_column_if_missing("last_reset_sent_at", "DATETIME")
-            
-            # Messages table
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='messages'")
-            tables = cursor.fetchone()
-            if not tables:
-                cursor.execute('''
-                    CREATE TABLE messages (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        sender_id INTEGER REFERENCES users(id),
-                        receiver_id INTEGER REFERENCES users(id),
-                        project_id INTEGER REFERENCES projects(id),
-                        content VARCHAR,
-                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                print("Created messages table.")
-
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            print(f"[ERROR] Migration failed: {e}")
-
-# Run migrations before creating tables to ensure new columns are added if DB exists
-apply_migrations()
+# Create all tables in PostgreSQL (safe: only creates if they don't exist)
 Base.metadata.create_all(bind=engine)
 
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
