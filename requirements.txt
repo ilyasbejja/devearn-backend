@@ -10,3 +10,4 @@ python-dotenv
 email-validator
 requests
 psycopg2-binary
+resend

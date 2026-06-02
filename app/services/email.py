@@ -88,14 +88,16 @@ def send_email_via_resend(to_email: str, subject: str, html_content: str) -> boo
 
 
 def send_email(to_email: str, subject: str, html_content: str) -> bool:
-    # Prioritize SMTP if configured, as it supports sending to any address (unlike Resend sandbox)
+    # Use Resend first when available, then fall back to SMTP if Resend fails or is not configured.
+    if RESEND_API_KEY:
+        if send_email_via_resend(to_email, subject, html_content):
+            return True
+        logger.warning("Resend failed, falling back to SMTP")
+
     if is_smtp_configured():
         if send_email_via_smtp(to_email, subject, html_content):
             return True
-        logger.warning("SMTP failed, falling back to Resend")
-
-    if RESEND_API_KEY:
-        return send_email_via_resend(to_email, subject, html_content)
+        logger.warning("SMTP failed")
 
     logger.warning("No email provider configured. Set RESEND_API_KEY or SMTP_* credentials.")
     return False
